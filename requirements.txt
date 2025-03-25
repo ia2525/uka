@@ -3,4 +3,5 @@ pandas
 plotly
 streamlit
 requests
+beautifulsoup4
 prophet[cmdstanpy]==1.1.5
