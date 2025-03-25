@@ -1,7 +1,16 @@
-numpy==1.26.4
-pandas
-plotly
+# Core packages
 streamlit
+pandas
+numpy==1.26.4
+
+# Plotting
+matplotlib
+plotly
+
+# Forecasting
+prophet[cmdstanpy]==1.1.5
+
+# Web scraping / APIs
 requests
 beautifulsoup4
-prophet[cmdstanpy]==1.1.5
+yfinance
