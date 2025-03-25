@@ -2,4 +2,4 @@ numpy==1.23.5
 pandas
 streamlit
 plotly
-prophet==1.1.5
+prophet[cmdstanpy]==1.1.5
