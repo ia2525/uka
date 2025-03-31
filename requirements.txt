@@ -7,9 +7,6 @@ numpy
 matplotlib
 plotly
 
-# Forecasting
-prophet[cmdstanpy]==1.1.5
-
 # Web scraping / APIs
 requests
 beautifulsoup4
