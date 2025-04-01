@@ -18,10 +18,19 @@ def fetch_industrial_production_index_from_csv():
     df_trimmed = df_trimmed.rename(columns={first_col: "industry"})
     df_trimmed["industry"] = df_trimmed["industry"].astype(str).apply(lambda x: x.strip() if isinstance(x, str) else x)
 
-    # Transpose so industries become columns
-    df_transposed = df_trimmed.set_index("industry").transpose().reset_index()
+    # Transpose the DataFrame to have dates as rows
+    df_transposed = df_trimmed.set_index("industry").T.reset_index()
     df_transposed = df_transposed.rename(columns={"index": "date"})
-    df_transposed["date"] = pd.PeriodIndex(df_transposed["date"], freq="Q").to_timestamp()
+
+    # Convert "date" column to datetime using quarter format
+    df_transposed["year"] = df_transposed["date"].str.extract(r"(\d{4})").astype(int)
+    df_transposed["quarter"] = df_transposed["date"].str.extract(r"(Q[1-4])")
+    quarter_to_month = {"Q1": 1, "Q2": 4, "Q3": 7, "Q4": 10}
+    df_transposed["month"] = df_transposed["quarter"].map(quarter_to_month)
+    df_transposed["date"] = pd.to_datetime(
+        df_transposed[["year", "month"]].assign(day=1)
+    )
+    df_transposed = df_transposed.drop(columns=["year", "quarter", "month"])
 
     # Show what columns were found (debug)
     st.write("📋 Available industry columns:", df_transposed.columns.tolist())

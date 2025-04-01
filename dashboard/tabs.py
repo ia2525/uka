@@ -7,7 +7,7 @@ import pandas as pd
 
 from indicators.gas_prices import fetch_gas_prices
 from indicators.weather import fetch_weather_forecasts
-from indicators.news_feed import fetch_google_news, summarize_news_with_gemini
+from indicators.news_feed import fetch_google_news
 #from indicators.production_index import fetch_industrial_production_index
 from indicators.production_index import fetch_industrial_production_index_from_csv
 
@@ -60,21 +60,105 @@ def render_weather_tab():
 # News tab
 def render_news_tab():
     st.subheader("📢 Policy & Market News")
-    news_df = fetch_google_news()
 
-    if not news_df.empty:
-        for index, row in news_df.iterrows():
-            st.write(f"**{row['title']}**")
-            st.write(f"Source: {row['source']}")
-            st.write(f"[Read more]({row['link']})")
+    # Market News Section
+    with st.expander("📰 Market News"):
+        news_df = fetch_google_news()
+
+        if not news_df.empty:
+            for index, row in news_df.iterrows():
+                st.write(f"**{row['title']}**")
+                st.write(f"Source: {row['source']} | Published: {row['published']}")
+                st.write(f"[Read more]({row['link']})")
+                st.write("-" * 80)
+        else:
+            st.write("No news articles available at the moment.")
+
+    # Policy Tracker Section
+    with st.expander("📋 Policy Tracker"):
+        st.markdown("### UK Government Policy Updates")
+        policies = [
+            {
+                "title": "2030 Extension of UK ETS",
+                "description": "The UK government is considering extending the UK ETS to 2030 to align with long-term climate goals.",
+                "status": "Under Review",
+                "last_updated": "2025-03-15"
+            },
+            {
+                "title": "Possible Linkage with EU ETS",
+                "description": "Discussions are ongoing regarding linking the UK ETS with the EU ETS to create a unified carbon market.",
+                "status": "In Negotiation",
+                "last_updated": "2025-01-28"
+            },
+            {
+                "title": "Inclusion of Waste Incineration Facilities",
+                "description": "The UK government is exploring the inclusion of waste incineration facilities in the UK ETS to reduce emissions.",
+                "status": "Proposed",
+                "last_updated": "2025-02-10"
+            }
+        ]
+
+        for policy in policies:
+            st.markdown(f"**{policy['title']}**")
+            st.write(policy["description"])
+            st.write(f"**Status:** {policy['status']} | **Last Updated:** {policy['last_updated']}")
             st.write("-" * 80)
 
-        st.markdown("### 🔍 Summary of News Headlines")
-        summary = summarize_news_with_gemini(news_df)
-        st.write(summary)
-    else:
-        st.write("No news articles available at the moment.")
+# Policy Tracker RSS Feed
+def render_news_tab():
+    st.subheader("📢 Policy & Market News")
 
+    # Create tabs for Market News and Policy Tracker
+    news_tabs = st.tabs(["📰 Market News", "📋 Policy Tracker"])
+
+    # Market News Tab
+    with news_tabs[0]:
+        st.markdown("### 📰 Market News")
+        news_df = fetch_google_news()
+
+        if not news_df.empty:
+            for index, row in news_df.iterrows():
+                st.write(f"**{row['title']}**")
+                st.write(f"Source: {row['source']} | Published: {row['published']}")
+                st.write(f"[Read more]({row['link']})")
+                st.write("-" * 80)
+        else:
+            st.write("No news articles available at the moment.")
+
+    # Policy Tracker Tab
+    with news_tabs[1]:
+        st.markdown("### 📋 Policy Tracker")
+        policies = [
+            {
+                "title": "2030 Extension of UK ETS",
+                "description": "The UK government is considering extending the UK ETS to 2030 to align with long-term climate goals.",
+                "status": "Under Review",
+                "last_updated": "2025-03-15",
+                "link": "https://www.gov.uk/uk-ets-2030-extension"
+            },
+            {
+                "title": "Possible Linkage with EU ETS",
+                "description": "Discussions are ongoing regarding linking the UK ETS with the EU ETS to create a unified carbon market.",
+                "status": "In Negotiation",
+                "last_updated": "2025-01-28",
+                "link": "https://www.reuters.com/uk-eu-ets-linkage"
+            },
+            {
+                "title": "Inclusion of Waste Incineration Facilities",
+                "description": "The UK government is exploring the inclusion of waste incineration facilities in the UK ETS to reduce emissions.",
+                "status": "Proposed",
+                "last_updated": "2025-02-10",
+                "link": "https://www.gov.uk/uk-ets-waste-incineration"
+            }
+        ]
+
+        # Display each policy update
+        for policy in policies:
+            st.markdown(f"#### **{policy['title']}**")
+            st.write(policy["description"])
+            st.write(f"**Status:** {policy['status']} | **Last Updated:** {policy['last_updated']}")
+            st.write(f"[Read more]({policy['link']})")
+            st.write("-" * 80)
 #Overlay tab 
 def overlays_tab(df):
     st.subheader("🧩 Overlays")
@@ -93,7 +177,7 @@ def overlays_tab(df):
         render_uka_vs_policy_overlay(df)
 
     elif selected_overlay == "UKA vs UK Industrial Output":
-        render_uka_vs_industrial_output(df)
+        render_uka_vs_industrial_overlay(df)
 
     plt.style.use("ggplot")
 

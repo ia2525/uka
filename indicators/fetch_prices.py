@@ -11,21 +11,29 @@ def get_real_uka_prices():
     }
 
     response = requests.get(url, headers=headers)
-    data = response.json()
+    if response.status_code != 200:
+        raise ConnectionError(f"Failed to fetch data. Status code: {response.status_code}")
 
-    # 👇 Check which 'bars' entry has the actual price data (usually second one)
+    data = response.json()
+    print("API Response:", data)  # Debugging: Print the full response
+
     bars = data.get("bars", [])
+    if not bars or not isinstance(bars, list):
+        raise ValueError("Unexpected format for 'bars' in the API response.")
+
+    # Adjust logic based on the structure of 'bars'
     if isinstance(bars[0], list) and isinstance(bars[0][0], list):
         bars = bars[1]  # Second entry is the real timeseries
     elif isinstance(bars[0], list):
         bars = bars
 
-    # Double-check shape of the first entry
+    # Validate the shape of the data
     if not all(len(row) == 2 for row in bars):
         raise ValueError("Each row in 'bars' must contain [date, price]")
 
     df = pd.DataFrame(bars, columns=["date", "uka_price"])
-    df["date"] = pd.to_datetime(df["date"])
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")  # Handle invalid dates
+    df = df.dropna(subset=["date"])  # Drop rows with invalid dates
     df = df.sort_values("date")
 
     print("✅ Fetched UKA prices from ICE JSON API.")
