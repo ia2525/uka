@@ -12,6 +12,7 @@ from dashboard.tabs import (
     render_gas_prices_tab,
     render_weather_tab,
     render_news_tab,
+    render_industrial_output_tab,
     overlays_tab
 )
 
@@ -25,6 +26,7 @@ tabs = st.tabs([
     "🔥 Gas Prices",
     "🌤️ UK Weather Forecast",
     "📢 Policy & Market News",
+    "🏭 Industrial Output",
     "🧩 Overlays"
 ])
 
@@ -32,4 +34,5 @@ with tabs[0]: render_uka_prices_tab(df)
 with tabs[1]: render_gas_prices_tab()
 with tabs[2]: render_weather_tab()
 with tabs[3]: render_news_tab()
-with tabs[4]: overlays_tab(df)
+with tabs[4]: render_industrial_output_tab()
+with tabs[5]: overlays_tab(df)

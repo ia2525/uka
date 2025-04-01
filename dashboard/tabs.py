@@ -1,5 +1,5 @@
 # uka_tracker/dashboard/tabs.py
-
+import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -8,6 +8,8 @@ import pandas as pd
 from indicators.gas_prices import fetch_gas_prices
 from indicators.weather import fetch_weather_forecasts
 from indicators.news_feed import fetch_google_news, summarize_news_with_gemini
+#from indicators.production_index import fetch_industrial_production_index
+from indicators.production_index import fetch_industrial_production_index_from_csv
 
 # UKA Prices tab
 def render_uka_prices_tab(df):
@@ -75,12 +77,32 @@ def render_news_tab():
 
 #Overlay tab 
 def overlays_tab(df):
+    st.subheader("🧩 Overlays")
+
+    overlay_options = [
+        "UKA vs Natural Gas Prices",
+        "UKA vs EU Linkage Announcement",
+        "UKA vs UK Industrial Output"  
+    ]
+    selected_overlay = st.selectbox("Choose an overlay", overlay_options)
+
+    if selected_overlay == "UKA vs Natural Gas Prices":
+        render_uka_vs_gas_overlay(df)
+
+    elif selected_overlay == "UKA vs EU Linkage Announcement":
+        render_uka_vs_policy_overlay(df)
+
+    elif selected_overlay == "UKA vs UK Industrial Output":
+        render_uka_vs_industrial_output(df)
+
+    plt.style.use("ggplot")
+
+def render_uka_vs_gas_overlay(df):
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
     import numpy as np
     from indicators.gas_prices import fetch_gas_prices
 
-    st.subheader("🧩 Overlay: UKA vs Natural Gas Prices")
     plt.style.use("ggplot")
 
     # --- Prepare Data ---
@@ -119,7 +141,7 @@ def overlays_tab(df):
         st.error("Little to no correlation in this period — external factors may be dominating.")
 
     st.markdown(
-        "### 📝 *This chart compares UKA prices with US natural gas prices to test whether rising gas prices leads to higher UKA demand (via industries switching to coal to offset higher prices))"
+        "### 📝 *This chart compares UKA prices with US natural gas prices to test whether rising gas prices lead to higher UKA demand (via industries switching to coal).*"
     )
 
     # --- Rolling Correlation ---
@@ -137,3 +159,56 @@ def overlays_tab(df):
     ax.tick_params(axis="x", rotation=45)
     fig_corr.tight_layout(pad=2)
     st.pyplot(fig_corr, use_container_width=True)
+
+def render_uka_vs_policy_overlay(df):
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    import pandas as pd
+
+    eu_linkage_announcement = pd.to_datetime("2025-01-28") #Source: https://www.reuters.com/sustainability/climate-energy/uk-carbon-prices-close-135-higher-eu-linking-talks-report-2025-01-28/
+
+    st.markdown("### 📅 Overlay: UKA Price vs EU Linkage Announcement")
+
+    fig, ax = plt.subplots(figsize=(6, 2.5), dpi=150)
+    ax.plot(df["date"], df["uka_price"], label="UKA Price", color="steelblue", linewidth=1.5)
+    ax.axvline(eu_linkage_announcement, color="orange", linestyle="--", linewidth=2, label="EU Linkage Announced")
+
+    ax.set_xlabel("Date", fontsize=9)
+    ax.set_ylabel("UKA Price (€)", fontsize=9)
+    ax.set_title("UKA Price and Policy Event", fontsize=11)
+    ax.legend(fontsize=8)
+    ax.tick_params(axis="both", labelsize=8)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+    ax.tick_params(axis="x", rotation=45)
+
+    fig.tight_layout(pad=2)
+    st.pyplot(fig, use_container_width=True)
+
+    st.markdown(
+        "📝 *This chart visualizes how UKA prices moved in response to policy announcements. "
+        "The orange line marks the date of the pissble EU ETS linkage announcement.*"
+    )
+
+def render_industrial_output_tab():
+    st.subheader("🏭 UK Industrial Output Over Time")
+
+    df = fetch_industrial_production_index_from_csv()
+
+    # Let user pick sectors to view
+    available = df.columns[1:]
+    if not len(available):
+        st.warning("No data to display.")
+        return
+
+    selected = st.multiselect("Select industries to plot", available, default=[available[0]])
+
+    fig, ax = plt.subplots(figsize=(7, 3), dpi=150)
+    for col in selected:
+        ax.plot(df["date"], pd.to_numeric(df[col], errors="coerce"), label=col, linewidth=1.5)
+
+    ax.set_title("Industrial Production Index (High-Emission Sectors)", fontsize=11)
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Index Value")
+    ax.tick_params(labelsize=8)
+    ax.legend(fontsize=8)
+    st.pyplot(fig, use_container_width=True)
