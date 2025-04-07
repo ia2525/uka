@@ -2,12 +2,16 @@ import sys
 from pathlib import Path
 import pandas as pd
 import streamlit as st
+
+# Set up app layout
 st.set_page_config(page_title="UK Carbon Allowance (UKA) Dashboard", layout="wide")
 
-# Ensure root project path is on sys.path
+# Add project root to sys.path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from dashboard.tabs import (
+# ✅ Now import tabs after sys.path is set
+from tabs import (
+    load_combined_uka_prices,  # ✅ newly added function
     render_uka_prices_tab,
     render_gas_prices_tab,
     render_weather_tab,
@@ -15,11 +19,9 @@ from dashboard.tabs import (
     render_industrial_output_tab,
     overlays_tab
 )
-
 # Load UKA price data
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "raw" / "uka_prices.csv"
-df = pd.read_csv(DATA_PATH)
-df["date"] = pd.to_datetime(df["date"])
+df = load_combined_uka_prices()
 
 tabs = st.tabs([
     "📈 UKA Prices",

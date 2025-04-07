@@ -1,24 +1,62 @@
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 # uka_tracker/dashboard/tabs.py
 import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
+from pathlib import Path
+
 
 from indicators.gas_prices import fetch_gas_prices
 from indicators.weather import fetch_weather_forecasts
 from indicators.news_feed import fetch_google_news
 #from indicators.production_index import fetch_industrial_production_index
 from indicators.production_index import fetch_industrial_production_index_from_csv
+from indicators.scrape_uka_prices import scrape_and_update_uka_timeseries
 
-# UKA Prices tab
-def render_uka_prices_tab(df):
-    st.subheader("Historical UKA Prices")
-    df = df.sort_values("date")
+def load_combined_uka_prices():
+    root = Path(__file__).resolve().parents[1] / "data" / "raw"
+
+    # Load both datasets
+    api_df = pd.read_csv(root / "uka_prices.csv", parse_dates=["date"])
+    scraped_df = pd.read_csv(root / "uka_timeseries.csv", parse_dates=["date"])
+
+    # Keep the latest price per date — scraped takes priority
+    combined = pd.concat([api_df, scraped_df])
+    combined = combined.drop_duplicates(subset="date", keep="last")
+    combined = combined.sort_values("date", ascending=True).reset_index(drop=True)
+    combined = combined.sort_values("date")
+
+    return combined
+
+
+def render_uka_prices_tab(_):
+    st.header("📈 Historical UKA Prices")
+
+    df = load_combined_uka_prices()  # Always load fresh combined data
+
+    if st.button("🔄 Fetch Latest UKA Price"):
+        try:
+            scrape_and_update_uka_timeseries()
+            df = load_combined_uka_prices()  # 🔁 Re-load merged data
+            st.success("✅ Data updated successfully.")
+        except Exception as e:
+            st.error(f"❌ Update failed: {e}")
+
+    # ✅ Display updated table and chart
+    st.dataframe(df.tail())
     st.line_chart(df.set_index("date")["uka_price"])
-    st.metric("Latest Price", f"€{df.iloc[-1]['uka_price']:.2f}", delta=f"{df.iloc[-1]['uka_price'] - df.iloc[-2]['uka_price']:.2f}")
 
+    # ✅ Latest price section
+    latest = df.iloc[-1]
+    previous = df.iloc[-2] if len(df) > 1 else None
+    delta = latest["uka_price"] - previous["uka_price"] if previous is not None else 0
 
+    st.markdown("### Latest Price")
+    st.metric(label=f"{latest['date'].date()}", value=f"€{latest['uka_price']:.2f}", delta=f"{delta:.2f}")
 # Gas Prices tab
 def render_gas_prices_tab():
     gas_df = fetch_gas_prices()
@@ -57,65 +95,15 @@ def render_weather_tab():
                 st.warning(f"No weather data available for {city}.")
 
 
-# News tab
+
+# News tab (consolidated version)
 def render_news_tab():
-    st.subheader("📢 Policy & Market News")
-
-    # Market News Section
-    with st.expander("📰 Market News"):
-        news_df = fetch_google_news()
-
-        if not news_df.empty:
-            for index, row in news_df.iterrows():
-                st.write(f"**{row['title']}**")
-                st.write(f"Source: {row['source']} | Published: {row['published']}")
-                st.write(f"[Read more]({row['link']})")
-                st.write("-" * 80)
-        else:
-            st.write("No news articles available at the moment.")
-
-    # Policy Tracker Section
-    with st.expander("📋 Policy Tracker"):
-        st.markdown("### UK Government Policy Updates")
-        policies = [
-            {
-                "title": "2030 Extension of UK ETS",
-                "description": "The UK government is considering extending the UK ETS to 2030 to align with long-term climate goals.",
-                "status": "Under Review",
-                "last_updated": "2025-03-15"
-            },
-            {
-                "title": "Possible Linkage with EU ETS",
-                "description": "Discussions are ongoing regarding linking the UK ETS with the EU ETS to create a unified carbon market.",
-                "status": "In Negotiation",
-                "last_updated": "2025-01-28"
-            },
-            {
-                "title": "Inclusion of Waste Incineration Facilities",
-                "description": "The UK government is exploring the inclusion of waste incineration facilities in the UK ETS to reduce emissions.",
-                "status": "Proposed",
-                "last_updated": "2025-02-10"
-            }
-        ]
-
-        for policy in policies:
-            st.markdown(f"**{policy['title']}**")
-            st.write(policy["description"])
-            st.write(f"**Status:** {policy['status']} | **Last Updated:** {policy['last_updated']}")
-            st.write("-" * 80)
-
-# Policy Tracker RSS Feed
-def render_news_tab():
-    st.subheader("📢 Policy & Market News")
-
-    # Create tabs for Market News and Policy Tracker
+    st.subheader("📲 Policy & Market News")
     news_tabs = st.tabs(["📰 Market News", "📋 Policy Tracker"])
 
-    # Market News Tab
     with news_tabs[0]:
         st.markdown("### 📰 Market News")
         news_df = fetch_google_news()
-
         if not news_df.empty:
             for index, row in news_df.iterrows():
                 st.write(f"**{row['title']}**")
@@ -125,7 +113,6 @@ def render_news_tab():
         else:
             st.write("No news articles available at the moment.")
 
-    # Policy Tracker Tab
     with news_tabs[1]:
         st.markdown("### 📋 Policy Tracker")
         policies = [
@@ -152,7 +139,6 @@ def render_news_tab():
             }
         ]
 
-        # Display each policy update
         for policy in policies:
             st.markdown(f"#### **{policy['title']}**")
             st.write(policy["description"])
