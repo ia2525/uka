@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
 from pathlib import Path
+import altair as alt
 
 
 from indicators.gas_prices import fetch_gas_prices
@@ -36,19 +37,48 @@ def load_combined_uka_prices():
 def render_uka_prices_tab(_):
     st.header("📈 Historical UKA Prices")
 
-    df = load_combined_uka_prices()  # Always load fresh combined data
+    df = load_combined_uka_prices()
 
     if st.button("🔄 Fetch Latest UKA Price"):
         try:
             scrape_and_update_uka_timeseries()
-            df = load_combined_uka_prices()  # 🔁 Re-load merged data
+            df = load_combined_uka_prices()
             st.success("✅ Data updated successfully.")
         except Exception as e:
             st.error(f"❌ Update failed: {e}")
 
-    # ✅ Display updated table and chart
-    st.dataframe(df.tail())
-    st.line_chart(df.set_index("date")["uka_price"])
+    df["SMA_7"] = df["uka_price"].rolling(window=7).mean()
+
+    # Melt for Altair
+    plot_df = df[["date", "uka_price", "SMA_7"]].melt("date", var_name="Series", value_name="Price")
+
+    color_scale = alt.Scale(domain=["uka_price", "SMA_7"], range=["#1f77b4", "orange"])
+
+    line = alt.Chart(plot_df).mark_line().encode(
+        x=alt.X("date:T", title="Date", axis=alt.Axis(format="%m/%d/%Y")),
+        y=alt.Y("Price:Q", title="€ Price"),
+        color=alt.Color("Series:N", scale=color_scale, title="Legend"),
+        tooltip=[
+            alt.Tooltip("date:T", title="Date", format="%m/%d/%Y"),
+            alt.Tooltip("Price:Q", title="Price", format=".2f"),
+            alt.Tooltip("Series:N", title="Type")
+        ]
+    )
+
+    points = alt.Chart(plot_df).mark_point(filled=True, size=30).encode(
+        x="date:T",
+        y="Price:Q",
+        color=alt.Color("Series:N", scale=color_scale),
+        tooltip=[
+            alt.Tooltip("date:T", title="Date", format="%m/%d/%Y"),
+            alt.Tooltip("Price:Q", title="Price", format=".2f"),
+            alt.Tooltip("Series:N", title="Type")
+        ]
+    )
+
+    chart = (line + points).properties(height=320)
+
+    st.altair_chart(chart, use_container_width=True)
 
     # ✅ Latest price section
     latest = df.iloc[-1]
@@ -57,6 +87,8 @@ def render_uka_prices_tab(_):
 
     st.markdown("### Latest Price")
     st.metric(label=f"{latest['date'].date()}", value=f"€{latest['uka_price']:.2f}", delta=f"{delta:.2f}")
+
+
 # Gas Prices tab
 def render_gas_prices_tab():
     gas_df = fetch_gas_prices()
