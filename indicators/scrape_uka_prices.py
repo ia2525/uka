@@ -6,7 +6,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 import pandas as pd
-from datetime import date  # ✅ This fixes your use of date.today()
+from datetime import date  #
 import os
 import time
 
@@ -17,7 +17,7 @@ def scrape_and_update_uka_timeseries(csv_path="data/raw/uka_timeseries.csv"):
     chrome_options.add_argument("--disable-gpu")
 
     # ✅ Path to your chromedriver
-    driver_path = r"C:\Repos\uka\uka\drivers\chromedriver.exe"
+    driver_path = r"C:\Users\Intern\chromedriver-win64\chromedriver-win64\chromedriver.exe"
     service = Service(driver_path)
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
@@ -75,8 +75,10 @@ def scrape_and_update_uka_timeseries(csv_path="data/raw/uka_timeseries.csv"):
                     print(f"📈 Timeseries started using contract {contract}")
                     return new_row
 
-                existing = pd.read_csv(csv_path, parse_dates=["date"])
-                if today not in existing["date"].dt.date.values:
+                existing = pd.read_csv(csv_path)
+                existing["date"] = pd.to_datetime(existing["date"]).dt.date  # Ensures dtype is date
+                
+                if today not in existing["date"].values:
                     updated = pd.concat([existing, new_row])
                     updated.to_csv(csv_path, index=False)
                     print(f"✅ New price appended for contract {contract}")

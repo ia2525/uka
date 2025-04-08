@@ -19,18 +19,17 @@ from indicators.production_index import fetch_industrial_production_index_from_c
 from indicators.scrape_uka_prices import scrape_and_update_uka_timeseries
 
 def load_combined_uka_prices():
-    root = Path(__file__).resolve().parents[1] / "data" / "raw"
+    # Load your data (replace with your actual logic)
+    df1 = pd.read_csv("data/raw/uka_prices.csv")
+    df2 = pd.read_csv("data/raw/uka_timeseries.csv")
 
-    # Load both datasets
-    api_df = pd.read_csv(root / "uka_prices.csv", parse_dates=["date"])
-    scraped_df = pd.read_csv(root / "uka_timeseries.csv", parse_dates=["date"])
+    combined = pd.concat([df1, df2], ignore_index=True)
 
-    # Keep the latest price per date — scraped takes priority
-    combined = pd.concat([api_df, scraped_df])
-    combined = combined.drop_duplicates(subset="date", keep="last")
+    # 🔑 Ensure all dates are consistent datetime type
+    combined["date"] = pd.to_datetime(combined["date"], errors="coerce").dt.date
+
+    # Now you can safely sort
     combined = combined.sort_values("date", ascending=True).reset_index(drop=True)
-    combined = combined.sort_values("date")
-
     return combined
 
 
@@ -86,7 +85,7 @@ def render_uka_prices_tab(_):
     delta = latest["uka_price"] - previous["uka_price"] if previous is not None else 0
 
     st.markdown("### Latest Price")
-    st.metric(label=f"{latest['date'].date()}", value=f"€{latest['uka_price']:.2f}", delta=f"{delta:.2f}")
+    st.metric(label=f"{latest['date']}", value=f"€{latest['uka_price']:.2f}", delta=f"{delta:.2f}")
 
 
 # Gas Prices tab
@@ -210,6 +209,12 @@ def render_uka_vs_gas_overlay(df):
     # --- Prepare Data ---
     uka_df = df[["date", "uka_price"]].copy()
     gas_df = fetch_gas_prices()[["date", "Close_NG=F"]].copy()
+
+    # 🔧 Make sure both 'date' columns are datetime64[ns]
+    uka_df["date"] = pd.to_datetime(uka_df["date"])
+    gas_df["date"] = pd.to_datetime(gas_df["date"])
+
+    # --- Merge and drop NaNs ---
     overlay_df = pd.merge(uka_df, gas_df, on="date", how="inner").dropna()
 
     # --- Overlay Plot ---
