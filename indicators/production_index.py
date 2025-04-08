@@ -1,58 +1,57 @@
+import os
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 
-def fetch_industrial_production_index_from_csv():
-    file_path = "data/raw/diop.csv"
-    
-    # Read the raw CSV, skipping metadata
-    df_raw = pd.read_csv(file_path, skiprows=163)
+base_dir = os.path.dirname(__file__)
+excel_path = os.path.join(base_dir, "..", "data", "raw", "Timeseries_for_uk_ets_allocations_non-aviation.xlsx")
 
-    # Dynamically detect first column (assumed to be industry name)
-    first_col = df_raw.columns[0]
-    
-    # Identify quarterly date columns (e.g., "2023 Q1")
-    date_cols = [col for col in df_raw.columns if pd.Series(col).str.match(r"^\d{4} Q[1-4]$").any()]
-    
-    # Trim and rename
-    df_trimmed = df_raw[[first_col] + date_cols].copy()
-    df_trimmed = df_trimmed.rename(columns={first_col: "industry"})
-    df_trimmed["industry"] = df_trimmed["industry"].astype(str).apply(lambda x: x.strip() if isinstance(x, str) else x)
+company_allocations = pd.read_excel(excel_path, sheet_name="Timeseries - Company Allocation")
+industry_allocations = pd.read_excel(excel_path, sheet_name="Timeseries-Industry Allocations")
 
-    # Transpose the DataFrame to have dates as rows
-    df_transposed = df_trimmed.set_index("industry").T.reset_index()
-    df_transposed = df_transposed.rename(columns={"index": "date"})
+print(company_allocations.head())
+print(industry_allocations.head())
 
-    # Convert "date" column to datetime using quarter format
-    df_transposed["year"] = df_transposed["date"].str.extract(r"(\d{4})").astype(int)
-    df_transposed["quarter"] = df_transposed["date"].str.extract(r"(Q[1-4])")
-    quarter_to_month = {"Q1": 1, "Q2": 4, "Q3": 7, "Q4": 10}
-    df_transposed["month"] = df_transposed["quarter"].map(quarter_to_month)
-    df_transposed["date"] = pd.to_datetime(
-        df_transposed[["year", "month"]].assign(day=1)
-    )
-    df_transposed = df_transposed.drop(columns=["year", "quarter", "month"])
+# Clean and select top 10 companies
+top_companies_df = company_allocations.dropna(subset=["Company"]).iloc[:10]
 
-    # Show what columns were found (debug)
-    st.write("📋 Available industry columns:", df_transposed.columns.tolist())
+# Clean and select top 10 industries (skip total row at top)
+top_industries_df = industry_allocations.dropna(subset=["Industries"]).iloc[1:11]
 
-    # Select only high-emission industries
-    high_emission_industries = [
-        "Manufacturing",
-        "Electricity, gas, steam and air conditioning supply",
-        "Coke and refined petroleum products",
-        "Chemical and chemical products",
-        "Basic metals"
-    ]
+# Identify year columns (you can also manually list them if needed)
+year_columns = [col for col in top_companies_df.columns if str(col).isdigit()]
 
-    # Filter to valid columns
-    valid_cols = ["date"] + [col for col in df_transposed.columns if col in high_emission_industries]
-    df_filtered = df_transposed[valid_cols]
+# Reshape companies
+companies_long = top_companies_df.melt(
+    id_vars="Company", 
+    value_vars=year_columns, 
+    var_name="Year", 
+    value_name="Allocation"
+)
 
-    if len(valid_cols) <= 1:
-        st.error("⚠️ No matching high-emission industries found in CSV. Check column headers.")
-        return pd.DataFrame()
+# Reshape industries
+industries_long = top_industries_df.melt(
+    id_vars="Industries", 
+    value_vars=year_columns, 
+    var_name="Year", 
+    value_name="Allocation"
+)
 
-    # Limit to last 12 months
-    df_filtered = df_filtered[df_filtered["date"] >= pd.Timestamp.now() - pd.DateOffset(months=12)]
+#Plotting the charts
+st.header("UKA Allocation Time Series")
 
-    return df_filtered
+st.subheader("Top 10 Companies")
+fig1 = px.line(
+    companies_long, 
+    x="Year", y="Allocation", color="Company",
+    title="Top 10 UKA Allocation Recipients – Companies"
+)
+st.plotly_chart(fig1)
+
+st.subheader("Top 10 Industries")
+fig2 = px.line(
+    industries_long, 
+    x="Year", y="Allocation", color="Industries",
+    title="Top 10 UKA Allocation Recipients – Industries"
+)
+st.plotly_chart(fig2)

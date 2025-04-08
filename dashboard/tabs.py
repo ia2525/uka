@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import os 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # uka_tracker/dashboard/tabs.py
 import numpy as np
@@ -9,13 +10,12 @@ import matplotlib.dates as mdates
 import pandas as pd
 from pathlib import Path
 import altair as alt
+import plotly.express as px
 
 
 from indicators.gas_prices import fetch_gas_prices
 from indicators.weather import fetch_weather_forecasts
 from indicators.news_feed import fetch_google_news
-#from indicators.production_index import fetch_industrial_production_index
-from indicators.production_index import fetch_industrial_production_index_from_csv
 from indicators.scrape_uka_prices import scrape_and_update_uka_timeseries
 
 def load_combined_uka_prices():
@@ -297,25 +297,53 @@ def render_uka_vs_policy_overlay(df):
     )
 
 def render_industrial_output_tab():
-    st.subheader("🏭 UK Industrial Output Over Time")
+    st.subheader("🏭 UK ETS Allocation Time Series")
 
-    df = fetch_industrial_production_index_from_csv()
+    # Load Excel data
+    base_dir = os.path.dirname(__file__)
+    excel_path = os.path.join(base_dir, "..", "data", "raw", "Timeseries_for_uk_ets_allocations_non-aviation.xlsx")
 
-    # Let user pick sectors to view
-    available = df.columns[1:]
-    if not len(available):
-        st.warning("No data to display.")
-        return
+    company_allocations = pd.read_excel(excel_path, sheet_name="Timeseries - Company Allocation")
+    industry_allocations = pd.read_excel(excel_path, sheet_name="Timeseries-Industry Allocations")
 
-    selected = st.multiselect("Select industries to plot", available, default=[available[0]])
+    # Top 10 companies and industries
+    top_companies_df = company_allocations.dropna(subset=["Company"]).iloc[:10]
+    top_industries_df = industry_allocations.dropna(subset=["Industries"]).iloc[1:11]
 
-    fig, ax = plt.subplots(figsize=(7, 3), dpi=150)
-    for col in selected:
-        ax.plot(df["date"], pd.to_numeric(df[col], errors="coerce"), label=col, linewidth=1.5)
+    year_columns = [col for col in top_companies_df.columns if str(col).isdigit()]
 
-    ax.set_title("Industrial Production Index (High-Emission Sectors)", fontsize=11)
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Index Value")
-    ax.tick_params(labelsize=8)
-    ax.legend(fontsize=8)
-    st.pyplot(fig, use_container_width=True)
+    # Melt for long format
+    companies_long = top_companies_df.melt(
+        id_vars="Company",
+        value_vars=year_columns,
+        var_name="Year",
+        value_name="Allocation"
+    )
+    industries_long = top_industries_df.melt(
+        id_vars="Industries",
+        value_vars=year_columns,
+        var_name="Year",
+        value_name="Allocation"
+    )
+
+    # Ensure years are strings
+    companies_long["Year"] = companies_long["Year"].astype(str)
+    industries_long["Year"] = industries_long["Year"].astype(str)
+
+    # 📊 Plot Companies
+    st.markdown("### 🧱 Top 10 Companies by ETS Allocation")
+    fig1 = px.line(
+        companies_long,
+        x="Year", y="Allocation", color="Company",
+        title="UK ETS Allocation: Top 10 Companies"
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # 📊 Plot Industries
+    st.markdown("### 🏗️ Top 10 Industries by ETS Allocation")
+    fig2 = px.line(
+        industries_long,
+        x="Year", y="Allocation", color="Industries",
+        title="UK ETS Allocation: Top 10 Industries"
+    )
+    st.plotly_chart(fig2, use_container_width=True)
