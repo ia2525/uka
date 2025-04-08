@@ -1,0 +1,51 @@
+name: Daily UKA Price Scraper (runs every 24 hrs)
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # Runs at 7:00 AM EST daily
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python packages
+        run: |
+          pip install -r requirements.txt
+
+      - name: Install Chrome for Testing + Chromedriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb
+          wget https://storage.googleapis.com/chrome-for-testing-public/122.0.6261.111/linux64/chrome-linux64.zip
+          unzip chrome-linux64.zip
+          sudo mv chrome-linux64 /opt/chrome
+          sudo ln -s /opt/chrome/chrome /usr/bin/google-chrome
+          
+          wget https://storage.googleapis.com/chrome-for-testing-public/122.0.6261.111/linux64/chromedriver-linux64.zip
+          unzip chromedriver-linux64.zip
+          sudo mv chromedriver-linux64/chromedriver /usr/bin/chromedriver
+          sudo chmod +x /usr/bin/chromedriver
+
+      - name: Run Scraper
+        run: |
+          xvfb-run --auto-servernum python update_uka_data.py
+
+      - name: Commit and Push if Updated
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data/raw/uka_timeseries.csv
+          git commit -m "Automated update to UKA timeseries" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
