@@ -17,6 +17,7 @@ from indicators.gas_prices import fetch_gas_prices
 from indicators.weather import fetch_weather_forecasts
 from indicators.news_feed import fetch_google_news
 from indicators.scrape_uka_prices import scrape_and_update_uka_timeseries
+from indicators.production_index import reshape_allocation_timeseries
 
 def load_combined_uka_prices():
     # Load your data (replace with your actual logic)
@@ -273,12 +274,12 @@ def render_uka_vs_policy_overlay(df):
     import pandas as pd
 
     eu_linkage_announcement = pd.to_datetime("2025-01-28") #Source: https://www.reuters.com/sustainability/climate-energy/uk-carbon-prices-close-135-higher-eu-linking-talks-report-2025-01-28/
-
-    st.markdown("### 📅 Overlay: UKA Price vs EU Linkage Announcement")
+    eu_linkage_update = pd.to_datetime("2025-03-20") #Source: https://carbon-pulse.com/380168/
 
     fig, ax = plt.subplots(figsize=(6, 2.5), dpi=150)
     ax.plot(df["date"], df["uka_price"], label="UKA Price", color="steelblue", linewidth=1.5)
-    ax.axvline(eu_linkage_announcement, color="orange", linestyle="--", linewidth=2, label="EU Linkage Announced")
+    ax.axvline(eu_linkage_announcement, color="green", linestyle="--", linewidth=2, label="Possible Linkage Announced")
+    ax.axvline(eu_linkage_update, color="orange", linestyle="--", linewidth=2, label="EU Linkage Update")
 
     ax.set_xlabel("Date", fontsize=9)
     ax.set_ylabel("UKA Price (€)", fontsize=9)
@@ -293,57 +294,88 @@ def render_uka_vs_policy_overlay(df):
 
     st.markdown(
         "📝 *This chart visualizes how UKA prices moved in response to policy announcements. "
-        "The orange line marks the date of the pissble EU ETS linkage announcement.*"
+        "The dashed lines mark policy updates."
+        "Update on March 20, 2025: The UK government formally confirmed it is considering the case for linking the country's carbon market to the EU ETS in an update published late on Thursday.*"""
+        "However, the UK government cautioned that this does not anticipate any outcome of key talks in May with the block.*"
     )
 
 def render_industrial_output_tab():
     st.subheader("🏭 UK ETS Allocation Time Series")
 
-    # Load Excel data
-    base_dir = os.path.dirname(__file__)
-    excel_path = os.path.join(base_dir, "..", "data", "raw", "Timeseries_for_uk_ets_allocations_non-aviation.xlsx")
+    companies_long, industries_long = reshape_allocation_timeseries()
 
-    company_allocations = pd.read_excel(excel_path, sheet_name="Timeseries - Company Allocation")
-    industry_allocations = pd.read_excel(excel_path, sheet_name="Timeseries-Industry Allocations")
+    company_tab, industry_tab = st.tabs(["🏢 Top 10 Companies", "🏗️ Top 10 Industries"])
 
-    # Top 10 companies and industries
-    top_companies_df = company_allocations.dropna(subset=["Company"]).iloc[:10]
-    top_industries_df = industry_allocations.dropna(subset=["Industries"]).iloc[1:11]
+    with company_tab:
+        st.markdown("### 🧱 UK ETS Allocation: Top 10 Companies")
 
-    year_columns = [col for col in top_companies_df.columns if str(col).isdigit()]
+        # Horizontal bar chart
+        fig1 = px.bar(
+            companies_long,
+            x="Allocation",
+            y="Company",
+            color="Year",  # color stack by year
+            orientation="h",
+            title="Top 10 Companies by Total ETS Allocation (Stacked by Year)",
+            labels={"Allocation": "UKA Allocation (€)", "Company": "Company"},
+            height=500
+        )
 
-    # Melt for long format
-    companies_long = top_companies_df.melt(
-        id_vars="Company",
-        value_vars=year_columns,
-        var_name="Year",
-        value_name="Allocation"
-    )
-    industries_long = top_industries_df.melt(
-        id_vars="Industries",
-        value_vars=year_columns,
-        var_name="Year",
-        value_name="Allocation"
-    )
+        # Ensure consistent ordering by total allocation
+        total_allocation = companies_long.groupby("Company")["Allocation"].sum().sort_values(ascending=True)
+        fig1.update_layout(
+            yaxis=dict(categoryorder="array", categoryarray=total_allocation.index.tolist()),
+            barmode="stack"
+        )
 
-    # Ensure years are strings
-    companies_long["Year"] = companies_long["Year"].astype(str)
-    industries_long["Year"] = industries_long["Year"].astype(str)
+        st.plotly_chart(fig1, use_container_width=True)
 
-    # 📊 Plot Companies
-    st.markdown("### 🧱 Top 10 Companies by ETS Allocation")
-    fig1 = px.line(
-        companies_long,
-        x="Year", y="Allocation", color="Company",
-        title="UK ETS Allocation: Top 10 Companies"
-    )
-    st.plotly_chart(fig1, use_container_width=True)
+        st.markdown("### 📉 Allocation Over Time – Top 3 Companies")
 
-    # 📊 Plot Industries
-    st.markdown("### 🏗️ Top 10 Industries by ETS Allocation")
-    fig2 = px.line(
-        industries_long,
-        x="Year", y="Allocation", color="Industries",
-        title="UK ETS Allocation: Top 10 Industries"
-    )
-    st.plotly_chart(fig2, use_container_width=True)
+        top_3_companies = total_allocation.tail(3).index.tolist()
+        top_3_df = companies_long[companies_long["Company"].isin(top_3_companies)]
+
+        fig3 = px.line(
+            top_3_df,
+            x="Year", y="Allocation", color="Company",
+            markers=True,
+            title="ETS Allocation Over Time – Top 3 Companies"
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+
+    with industry_tab:
+        st.markdown("### 🏗️ UK ETS Allocation: Top 10 Industries")
+
+        # Horizontal stacked bar chart for industries
+        fig2 = px.bar(
+            industries_long,
+            x="Allocation",
+            y="Industries",
+            color="Year",  # Stack by year
+            orientation="h",
+            title="Top 10 Industries by Total ETS Allocation (Stacked by Year)",
+            labels={"Allocation": "UKA Allocation (€)", "Industries": "Industry"},
+            height=500
+        )
+
+        # Consistent ordering by total allocation
+        total_industry_allocation = industries_long.groupby("Industries")["Allocation"].sum().sort_values(ascending=True)
+        fig2.update_layout(
+            yaxis=dict(categoryorder="array", categoryarray=total_industry_allocation.index.tolist()),
+            barmode="stack"
+        )
+
+        st.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown("### 📉 Allocation Over Time – Top 3 Industries")
+
+        top_3_industries = total_industry_allocation.tail(3).index.tolist()
+        top_3_industry_df = industries_long[industries_long["Industries"].isin(top_3_industries)]
+
+        fig4 = px.line(
+            top_3_industry_df,
+            x="Year", y="Allocation", color="Industries",
+            markers=True,
+            title="ETS Allocation Over Time – Top 3 Industries"
+        )
+        st.plotly_chart(fig4, use_container_width=True)
