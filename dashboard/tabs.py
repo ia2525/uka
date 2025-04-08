@@ -15,7 +15,7 @@ import plotly.express as px
 
 from indicators.gas_prices import fetch_gas_prices
 from indicators.weather import fetch_weather_forecasts
-from indicators.news_feed import fetch_google_news
+from indicators.news_feed import fetch_google_news, fetch_uka_players_news
 from indicators.scrape_uka_prices import scrape_and_update_uka_timeseries
 from indicators.production_index import reshape_allocation_timeseries
 
@@ -131,43 +131,54 @@ def render_weather_tab():
 # News tab (consolidated version)
 def render_news_tab():
     st.subheader("📲 Policy & Market News")
-    news_tabs = st.tabs(["📰 Market News", "📋 Policy Tracker"])
 
+    news_tabs = st.tabs(["📰 Market News", "📋 Policy Tracker", "🏭 Major UKA Players"])
+
+    # Tab 1 – General Market News
     with news_tabs[0]:
         st.markdown("### 📰 Market News")
         news_df = fetch_google_news()
         if not news_df.empty:
-            for index, row in news_df.iterrows():
+            for _, row in news_df.iterrows():
                 st.write(f"**{row['title']}**")
-                st.write(f"Source: {row['source']} | Published: {row['published']}")
+                st.write(f"Source: {row['source']} | Published: {row['published'].strftime('%Y-%m-%d')}")
                 st.write(f"[Read more]({row['link']})")
                 st.write("-" * 80)
         else:
             st.write("No news articles available at the moment.")
 
+    # Tab 2 – Policy Tracker
     with news_tabs[1]:
         st.markdown("### 📋 Policy Tracker")
+
         policies = [
             {
                 "title": "2030 Extension of UK ETS",
                 "description": "The UK government is considering extending the UK ETS to 2030 to align with long-term climate goals.",
                 "status": "Under Review",
                 "last_updated": "2025-03-15",
-                "link": "https://www.gov.uk/uk-ets-2030-extension"
+                "search_url": "https://www.google.com/search?q=UK+ETS+Extension+news"
             },
             {
                 "title": "Possible Linkage with EU ETS",
                 "description": "Discussions are ongoing regarding linking the UK ETS with the EU ETS to create a unified carbon market.",
                 "status": "In Negotiation",
                 "last_updated": "2025-01-28",
-                "link": "https://www.reuters.com/uk-eu-ets-linkage"
+                "search_url": "https://www.google.com/search?q=UK+ETS+EU+linkage"
             },
             {
                 "title": "Inclusion of Waste Incineration Facilities",
                 "description": "The UK government is exploring the inclusion of waste incineration facilities in the UK ETS to reduce emissions.",
                 "status": "Proposed",
                 "last_updated": "2025-02-10",
-                "link": "https://www.gov.uk/uk-ets-waste-incineration"
+                "search_url": "https://www.google.com/search?q=UK+ETS+waste+incineration"
+            },
+            {
+                "title": "Inclusion of Maritime Sector in UK ETS",
+                "description": "Following the EU's lead, the UK is considering including maritime emissions in the UK ETS to better regulate the shipping sector.",
+                "status": "Under Discussion",
+                "last_updated": "2025-03-30",
+                "search_url": "https://www.google.com/search?q=UK+ETS+maritime+shipping+inclusion"
             }
         ]
 
@@ -175,8 +186,39 @@ def render_news_tab():
             st.markdown(f"#### **{policy['title']}**")
             st.write(policy["description"])
             st.write(f"**Status:** {policy['status']} | **Last Updated:** {policy['last_updated']}")
-            st.write(f"[Read more]({policy['link']})")
-            st.write("-" * 80)
+            st.markdown(f"[🔍 View Google News]({policy['search_url']})")
+            st.markdown("---")
+
+    # Tab 3 – UKA Players + Google Links
+    with news_tabs[2]:
+        st.markdown("### 🏭 News on Major UKA Buyers & Industries")
+
+        players_news = fetch_uka_players_news()
+        if not players_news.empty:
+            for _, row in players_news.iterrows():
+                st.write(f"**{row['title']}**")
+                st.write(f"Source: {row['source']} | Published: {row['published'].strftime('%Y-%m-%d')}")
+                st.write(f"[Read more]({row['link']})")
+                st.write("-" * 80)
+        else:
+            st.warning("No recent news found for major UKA players or industries via RSS.")
+
+        st.markdown("---")
+        st.markdown("### 🔎 Live Google Search Links")
+        st.info("RSS Feed often lags considerably. The below open Google with live news results for top companies and emitting sectors.")
+
+        search_links = {
+            "Tata Steel UK Limited": "https://www.google.com/search?q=Tata+Steel+UK+news",
+            "British Steel Limited": "https://www.google.com/search?q=British+Steel+news",
+            "Phillips 66 Limited": "https://www.google.com/search?q=Phillips+66+news",
+            "Oil Refining News": "https://www.google.com/search?q=UK+oil+refining+industry+news",
+            "Cement Industry News": "https://www.google.com/search?q=UK+cement+industry+news",
+            "Combustion of Fuels News": "https://www.google.com/search?q=UK+combustion+of+fuels+industry+news"
+        }
+
+        for label, url in search_links.items():
+            st.markdown(f"🔗 [**{label}**]({url})")
+
 #Overlay tab 
 def overlays_tab(df):
     st.subheader("🧩 Overlays")
@@ -283,7 +325,7 @@ def render_uka_vs_policy_overlay(df):
 
     ax.set_xlabel("Date", fontsize=9)
     ax.set_ylabel("UKA Price (€)", fontsize=9)
-    ax.set_title("UKA Price and Policy Event", fontsize=11)
+    ax.set_title("UKA Prices vs Policy Events", fontsize=11)
     ax.legend(fontsize=8)
     ax.tick_params(axis="both", labelsize=8)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
