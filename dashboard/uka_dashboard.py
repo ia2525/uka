@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-import pandas as pd
 import streamlit as st
 
 # Set up app layout
@@ -13,7 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from tabs import (
     load_combined_uka_prices,  # ✅ newly added function
     render_uka_prices_tab,
-    render_gas_prices_tab,
+    render_carbon_tab,
     render_weather_tab,
     render_news_tab,
     render_industrial_output_tab,
@@ -25,15 +24,15 @@ df = load_combined_uka_prices()
 
 tabs = st.tabs([
     "📈 UKA Prices",
-    "🔥 Gas Prices",
-    "🌤️ UK Weather Forecast",
-    "📢 Policy & Market News",
-    "🏭 Industrial Output",
-    "🧩 Overlays"
+    " Live UK Carbon Intensity Data",
+    " UK Weather Forecast",
+    " Policy & Market News",
+    " Industrial Output",
+    " Overlays"
 ])
 
 with tabs[0]: render_uka_prices_tab(df)
-with tabs[1]: render_gas_prices_tab()
+with tabs[1]: render_carbon_tab()
 with tabs[2]: render_weather_tab()
 with tabs[3]: render_news_tab()
 with tabs[4]: render_industrial_output_tab()

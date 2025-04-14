@@ -1,19 +1,17 @@
 import sys
+import pandas as pd
 from pathlib import Path
-import os 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-# uka_tracker/dashboard/tabs.py
-import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 import pandas as pd
 from pathlib import Path
 import altair as alt
 import plotly.express as px
+import plotly.graph_objects as go
 
 
-from indicators.gas_prices import fetch_gas_prices
+from indicators.carbon_intensity_api import fetch_carbon_intensity, fetch_national_carbon_timeseries, fetch_regional_carbon_intensity
 from indicators.weather import fetch_weather_forecasts
 from indicators.news_feed import fetch_google_news, fetch_uka_players_news
 from indicators.scrape_uka_prices import scrape_and_update_uka_timeseries
@@ -89,27 +87,82 @@ def render_uka_prices_tab(_):
     st.metric(label=f"{latest['date']}", value=f"€{latest['uka_price']:.2f}", delta=f"{delta:.2f}")
 
 
-# Gas Prices tab
-def render_gas_prices_tab():
-    gas_df = fetch_gas_prices()
-    st.subheader("🔥 Gas Prices")
+# Carbon Intensity tab
+def render_carbon_tab():
+    st.subheader("🌍 UK Carbon Intensity")
 
-    TICKER_LABELS = {
-        "Close_NG=F": "US Natural Gas (Henry Hub) - Close",
-        "Volume_NG=F": "US Natural Gas (Henry Hub) - Volume",
-        "Close_BZ=F": "Brent Crude Oil - Close",
-        "Volume_BZ=F": "Brent Crude Oil - Volume"
+    # 🔹 LIVE SNAPSHOT
+    intensity = fetch_carbon_intensity()
+    if intensity["actual"] is not None:
+        st.metric("Actual Intensity (gCO₂/kWh)", intensity["actual"])
+        st.metric("Forecast Intensity (gCO₂/kWh)", intensity["forecast"])
+        st.text(f"Intensity Index: {intensity['index']}")
+    else:
+        st.warning("Could not fetch carbon intensity data at this time.")
+
+    st.markdown("---")
+
+    # 🔹 HISTORICAL NATIONAL TIME SERIES
+    st.subheader("📈 Historical Carbon Intensity Since Jan 1, 2025")
+    with st.spinner("Fetching time series..."):
+        df = fetch_national_carbon_timeseries()
+
+    if not df.empty:
+        df = df.set_index("from")[["actual", "forecast"]].resample("h").mean().reset_index()
+        st.line_chart(df.set_index("from")[["actual", "forecast"]])
+    else:
+        st.warning("No historical data could be loaded.")
+
+    st.markdown("---")
+
+    # 🔹 REGIONAL MAP
+    st.subheader("🗺️ Regional Carbon Intensity – UK Map")
+
+    regional_df = fetch_regional_carbon_intensity()
+    regional_df = regional_df.dropna(subset=["lat", "lon"])
+
+    # ✅ Define custom color mapping
+    CUSTOM_INDEX_COLORS = {
+        "very low": "green",
+        "low": "#a6d96a",
+        "moderate": "yellow",
+        "high": "orange",
+        "very high": "red"
     }
 
-    # Only use these columns
-    tab_columns = list(TICKER_LABELS.keys())
+    # ✅ Map index → color
+    regional_df["color"] = regional_df["index"].map(CUSTOM_INDEX_COLORS)
 
-    gas_tabs = st.tabs([TICKER_LABELS[col] for col in tab_columns])
+    if not regional_df.empty:
+        fig = go.Figure()
 
-    for tab, col in zip(gas_tabs, tab_columns):
-        with tab:
-            st.subheader(TICKER_LABELS[col])
-            st.line_chart(gas_df.set_index("date")[[col]])
+        for _, row in regional_df.iterrows():
+            fig.add_trace(go.Scattermapbox(
+                lat=[row["lat"]],
+                lon=[row["lon"]],
+                mode="markers",
+                marker=go.scattermapbox.Marker(
+                    size=20,
+                    color=row["color"]
+                ),
+                name=row["region"],
+                hovertext=f"{row['region']}<br>Index: {row['index']}",
+                hoverinfo="text"
+            ))
+
+        fig.update_layout(
+            mapbox=dict(
+                style="carto-positron",
+                zoom=5,
+                center={"lat": 54.0, "lon": -2.5}
+            ),
+            margin={"r": 0, "t": 0, "l": 0, "b": 0},
+            showlegend=False
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No regional data available to display.")
 
 # Weather tab
 def render_weather_tab():
@@ -242,91 +295,15 @@ def overlays_tab(df):
     st.subheader("🧩 Overlays")
 
     overlay_options = [
-        "UKA vs Natural Gas Prices",
-        "UKA vs EU Linkage Announcement",
-        "UKA vs UK Industrial Output"  
+        "UKA vs EU Linkage Announcement" 
     ]
     selected_overlay = st.selectbox("Choose an overlay", overlay_options)
 
-    if selected_overlay == "UKA vs Natural Gas Prices":
-        render_uka_vs_gas_overlay(df)
-
-    elif selected_overlay == "UKA vs EU Linkage Announcement":
+    if selected_overlay == "UKA vs EU Linkage Announcement":
         render_uka_vs_policy_overlay(df)
 
-    elif selected_overlay == "UKA vs UK Average Weather":
-        render_uka_vs_industrial_overlay(df)
 
     plt.style.use("ggplot")
-
-def render_uka_vs_gas_overlay(df):
-    import matplotlib.pyplot as plt
-    import matplotlib.dates as mdates
-    import numpy as np
-    from indicators.gas_prices import fetch_gas_prices
-
-    plt.style.use("ggplot")
-
-    # --- Prepare Data ---
-    uka_df = df[["date", "uka_price"]].copy()
-    gas_df = fetch_gas_prices()[["date", "Close_NG=F"]].copy()
-
-    # 🔧 Make sure both 'date' columns are datetime64[ns]
-    uka_df["date"] = pd.to_datetime(uka_df["date"])
-    gas_df["date"] = pd.to_datetime(gas_df["date"])
-
-    # --- Merge and drop NaNs ---
-    overlay_df = pd.merge(uka_df, gas_df, on="date", how="inner").dropna()
-
-    # --- Overlay Plot ---
-    fig, ax1 = plt.subplots(figsize=(4, 2), dpi=150)
-    ax1.set_xlabel("Date", fontsize=7)
-    ax1.set_ylabel("UKA Price (€)", color="tab:blue", fontsize=8)
-    ax1.plot(overlay_df["date"], overlay_df["uka_price"], color="tab:blue", linewidth=1.5)
-    ax1.tick_params(axis="y", labelcolor="tab:blue", labelsize=7)
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-    ax1.tick_params(axis="x", labelsize=7, rotation=45)
-
-    ax2 = ax1.twinx()
-    ax2.set_ylabel("US Natural Gas Price (USD/MMBtu)", color="tab:red", fontsize=8)
-    ax2.plot(overlay_df["date"], overlay_df["Close_NG=F"], color="tab:red", linewidth=1.5)
-    ax2.tick_params(axis="y", labelcolor="tab:red", labelsize=7)
-
-    fig.tight_layout(pad=2)
-    st.pyplot(fig, use_container_width=True)
-
-    # --- Correlation ---
-    correlation = np.corrcoef(overlay_df["uka_price"], overlay_df["Close_NG=F"])[0, 1]
-    st.markdown(f"📈 **Correlation (Pearson):** `{correlation:.2f}`")
-
-    if correlation > 0.5:
-        st.success("UKA and Natural Gas show a strong positive correlation during this period.")
-    elif correlation > 0.2:
-        st.info("There's a mild positive correlation between UKA and Natural Gas.")
-    elif correlation < -0.2:
-        st.warning("There's an inverse correlation — they move in opposite directions.")
-    else:
-        st.error("Little to no correlation in this period — external factors may be dominating.")
-
-    st.markdown(
-        "### 📝 *This chart compares UKA prices with US natural gas prices to test whether rising gas prices lead to higher UKA demand (via industries switching to coal).*"
-    )
-
-    # --- Rolling Correlation ---
-    rolling_corr = overlay_df["uka_price"].rolling(window=7).corr(overlay_df["Close_NG=F"])
-    st.subheader("📉 7-Day Rolling Correlation (UKA vs Natural Gas)")
-
-    fig_corr, ax = plt.subplots(figsize=(6, 2.5), dpi=150)
-    ax.plot(overlay_df["date"], rolling_corr, color="purple", linewidth=1.5)
-    ax.axhline(0, linestyle="--", color="gray", linewidth=1)
-    ax.set_title("Rolling Correlation", fontsize=11)
-    ax.set_ylabel("Correlation", fontsize=9)
-    ax.set_xlabel("Date", fontsize=9)
-    ax.tick_params(axis="both", labelsize=8)
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-    ax.tick_params(axis="x", rotation=45)
-    fig_corr.tight_layout(pad=2)
-    st.pyplot(fig_corr, use_container_width=True)
 
 def render_uka_vs_policy_overlay(df):
     import matplotlib.pyplot as plt
