@@ -3,7 +3,7 @@ name: Daily UKA Price Scraper (runs every 24 hrs)
 on:
   schedule:
     - cron: '0 7 * * *'  # Runs at 7:00 AM EST daily
-  workflow_dispatch:  # Allows manual triggering
+  workflow_dispatch:      # Allows manual triggering
 
 permissions:
   contents: write
@@ -13,19 +13,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: ⬇️ Checkout repo
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Install Python packages
+      - name: 📦 Install Python packages
         run: |
           pip install -r requirements.txt
+          pip install google-cloud-bigquery
 
-      - name: Install Chrome for Testing + Chromedriver
+      - name: 🧪 Install Chrome for Testing + Chromedriver
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip xvfb
@@ -33,17 +34,17 @@ jobs:
           unzip chrome-linux64.zip
           sudo mv chrome-linux64 /opt/chrome
           sudo ln -sf /opt/chrome/chrome /usr/bin/google-chrome
-          
+
           wget https://storage.googleapis.com/chrome-for-testing-public/122.0.6261.111/linux64/chromedriver-linux64.zip
           unzip chromedriver-linux64.zip
           sudo mv chromedriver-linux64/chromedriver /usr/bin/chromedriver
           sudo chmod +x /usr/bin/chromedriver
 
-      - name: Run Scraper
+      - name: 🔄 Run UKA Scraper
         run: |
           xvfb-run --auto-servernum python update_uka_data.py
 
-      - name: Commit and Push if Updated
+      - name: 📤 Commit and Push if Updated
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -52,3 +53,13 @@ jobs:
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: ☁️ Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: your_project_id
+          service_account_key: ${{ secrets.GCP_KEY }}
+          export_default_credentials: true
+
+      - name: 📊 Run Carbon Intensity BigQuery Uploader
+        run: python streamlit/scripts/update_carbon_data.py
