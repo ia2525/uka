@@ -1,4 +1,6 @@
 import sys
+import json
+import requests
 import pandas as pd
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -11,9 +13,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 
-from indicators.carbon_intensity_api import fetch_carbon_intensity, fetch_national_carbon_timeseries, fetch_regional_carbon_intensity
+from indicators.carbon_intensity_api import fetch_carbon_intensity, fetch_national_carbon_timeseries, fetch_national_carbon_timeseries_2020
 from indicators.weather import fetch_weather_forecasts
-from indicators.news_feed import fetch_google_news, fetch_uka_players_news
 from indicators.scrape_uka_prices import scrape_and_update_uka_timeseries
 from indicators.production_index import reshape_allocation_timeseries
 
@@ -89,6 +90,9 @@ def render_uka_prices_tab(_):
 
 # Carbon Intensity tab
 def render_carbon_tab():
+    import pandas as pd
+    import plotly.express as px
+
     st.subheader("🌍 UK Carbon Intensity")
 
     # 🔹 LIVE SNAPSHOT
@@ -108,61 +112,103 @@ def render_carbon_tab():
         df = fetch_national_carbon_timeseries()
 
     if not df.empty:
-        df = df.set_index("from")[["actual", "forecast"]].resample("h").mean().reset_index()
-        st.line_chart(df.set_index("from")[["actual", "forecast"]])
-    else:
-        st.warning("No historical data could be loaded.")
+        df["from"] = pd.to_datetime(df["from"])
+        df = df.set_index("from").sort_index()
 
-    st.markdown("---")
+        # 12h & 30d smoothing
+        df["12h_avg"] = df["actual"].rolling("12h").mean()
+        df["30d_avg"] = df["actual"].rolling("30d").mean()
 
-    # 🔹 REGIONAL MAP
-    st.subheader("🗺️ Regional Carbon Intensity – UK Map")
+        df_plot = df[["12h_avg", "30d_avg"]].dropna().reset_index()
+        df_melted = df_plot.melt(id_vars="from", var_name="Smoothing", value_name="Intensity")
 
-    regional_df = fetch_regional_carbon_intensity()
-    regional_df = regional_df.dropna(subset=["lat", "lon"])
-
-    # ✅ Define custom color mapping
-    CUSTOM_INDEX_COLORS = {
-        "very low": "green",
-        "low": "#a6d96a",
-        "moderate": "yellow",
-        "high": "orange",
-        "very high": "red"
-    }
-
-    # ✅ Map index → color
-    regional_df["color"] = regional_df["index"].map(CUSTOM_INDEX_COLORS)
-
-    if not regional_df.empty:
-        fig = go.Figure()
-
-        for _, row in regional_df.iterrows():
-            fig.add_trace(go.Scattermapbox(
-                lat=[row["lat"]],
-                lon=[row["lon"]],
-                mode="markers",
-                marker=go.scattermapbox.Marker(
-                    size=20,
-                    color=row["color"]
-                ),
-                name=row["region"],
-                hovertext=f"{row['region']}<br>Index: {row['index']}",
-                hoverinfo="text"
-            ))
+        fig = px.line(
+            df_melted,
+            x="from",
+            y="Intensity",
+            color="Smoothing",
+            title="📉 Historical Carbon Intensity – Since Jan 1, 2025",
+            labels={"from": "Date", "Intensity": "gCO₂/kWh"},
+            height=450
+        )
 
         fig.update_layout(
-            mapbox=dict(
-                style="carto-positron",
-                zoom=5,
-                center={"lat": 54.0, "lon": -2.5}
-            ),
-            margin={"r": 0, "t": 0, "l": 0, "b": 0},
-            showlegend=False
+            xaxis_title="Date",
+            yaxis_title="Carbon Intensity (gCO₂/kWh)",
+            margin=dict(l=40, r=40, t=40, b=20),
+            legend_title_text="Rolling Avg",
+            template="plotly_white",
+            xaxis=dict(
+                rangeselector=dict(
+                    buttons=[
+                        dict(count=7, label="1w", step="day", stepmode="backward"),
+                        dict(count=14, label="2w", step="day", stepmode="backward"),
+                        dict(count=1, label="1m", step="month", stepmode="backward"),
+                        dict(step="all")
+                    ]
+                ),
+                rangeslider=dict(visible=True),  # 👈 this enables the horizontal slider!
+                type="date"
+            )
         )
 
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning("No regional data available to display.")
+        st.warning("No historical data could be loaded.")
+
+    # SECOND - LONGER HISTORICAL GRAPH
+    st.subheader("📈 Historical Carbon Intensity Since Jan 1, 2020")
+    with st.spinner("Fetching time series..."):
+        df = fetch_national_carbon_timeseries_2020()
+
+    if not df.empty:
+        df["from"] = pd.to_datetime(df["from"])
+        df = df.set_index("from").sort_index()
+
+        # Create rolling averages
+        df["48h_avg"] = df["actual"].rolling("48h").mean()
+        df["30d_avg"] = df["actual"].rolling("30D").mean()
+
+        # Drop NaNs introduced by rolling
+        df_plot = df[["48h_avg", "30d_avg"]].dropna().reset_index()
+
+        # Plot with both lines
+        fig = px.line(
+            df_plot,
+            x="from",
+            y=["48h_avg", "30d_avg"],
+            title="📉 Historical Carbon Intensity (48h & 30d Avg) – Since Jan 1, 2020",
+            labels={
+                "from": "Date",
+                "value": "Carbon Intensity (gCO₂/kWh)",
+                "variable": "Average Type"
+            },
+            height=450
+        )
+
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Carbon Intensity (gCO₂/kWh)",
+            margin=dict(l=40, r=40, t=40, b=20),
+            template="plotly_white",
+            xaxis=dict(
+                rangeselector=dict(
+                    buttons=[
+                        dict(count=6, label="6m", step="month", stepmode="backward"),
+                        dict(count=1, label="1yr", step="year", stepmode="backward"),
+                        dict(count=3, label="3yr", step="year", stepmode="backward"),
+                        dict(step="all")
+                    ]
+                ),
+                rangeslider=dict(visible=True),
+                type="date"
+            )
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No historical data could be loaded.")
+
 
 # Weather tab
 def render_weather_tab():
@@ -184,23 +230,11 @@ def render_weather_tab():
 def render_news_tab():
     st.subheader("📲 Policy & Market News")
 
-    news_tabs = st.tabs(["📰 Market News", "📋 Policy Tracker", "🏭 Major UKA Players"])
+    news_tabs = st.tabs(["📋 Policy Tracker", "🏭 Major UKA Players"])
 
-    # Tab 1 – General Market News
+    # Tab 1 – Policy Tracker
+
     with news_tabs[0]:
-        st.markdown("### 📰 Market News")
-        news_df = fetch_google_news()
-        if not news_df.empty:
-            for _, row in news_df.iterrows():
-                st.write(f"**{row['title']}**")
-                st.write(f"Source: {row['source']} | Published: {row['published'].strftime('%Y-%m-%d')}")
-                st.write(f"[Read more]({row['link']})")
-                st.write("-" * 80)
-        else:
-            st.write("No news articles available at the moment.")
-
-    # Tab 2 – Policy Tracker
-    with news_tabs[1]:
         st.markdown("### 📋 Policy Tracker")
 
         policies = [
@@ -260,19 +294,9 @@ def render_news_tab():
             st.markdown("---")
 
 
-    # Tab 3 – UKA Players + Google Links
-    with news_tabs[2]:
+    # Tab 2 – UKA Players + Google Links
+    with news_tabs[1]:
         st.markdown("### 🏭 News on Major UKA Buyers & Industries")
-
-        players_news = fetch_uka_players_news()
-        if not players_news.empty:
-            for _, row in players_news.iterrows():
-                st.write(f"**{row['title']}**")
-                st.write(f"Source: {row['source']} | Published: {row['published'].strftime('%Y-%m-%d')}")
-                st.write(f"[Read more]({row['link']})")
-                st.write("-" * 80)
-        else:
-            st.warning("No recent news found for major UKA players or industries via RSS.")
 
         st.markdown("---")
         st.markdown("### 🔎 Live Google Search Links")

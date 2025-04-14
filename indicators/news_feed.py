@@ -3,42 +3,6 @@ from urllib.parse import urlparse, quote
 import feedparser  # Requires: pip install feedparser
 from datetime import datetime, timedelta
 
-def fetch_google_news():
-    query = "UK Carbon Allowance OR UKA OR UK ETS OR linking with EU OR linking emissions trading OR ETS link"
-    encoded_query = quote(query)
-    rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
-
-    feed = feedparser.parse(rss_url)
-
-    if not feed.entries:
-        print("❌ Failed to fetch news from RSS feed.")
-        return pd.DataFrame()
-
-    news_data = []
-    for entry in feed.entries[:6]:
-        title = entry.title
-        link = entry.link
-        source = entry.source.title if "source" in entry else "Unknown Source"
-        published = entry.published if "published" in entry else "Unknown Date"
-        description = entry.summary if "summary" in entry else ""
-
-        news_data.append({
-            "title": title,
-            "source": source,
-            "link": link,
-            "published": published,
-            "description": description
-        })
-
-    news_df = pd.DataFrame(news_data)
-    news_df["published"] = pd.to_datetime(news_df["published"], errors="coerce")
-
-    # ✅ Filter for past 30 days
-    one_month_ago = datetime.now() - timedelta(days=30)
-    news_df = news_df[news_df["published"] >= one_month_ago]
-
-    news_df = news_df.sort_values(by="published", ascending=False)
-    return news_df
 
 def fetch_uka_players_news():
     # 🎯 Keywords focused on top UKA players and high-emitting industries
