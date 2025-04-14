@@ -126,9 +126,8 @@ def render_weather_tab():
             else:
                 st.warning(f"No weather data available for {city}.")
 
-
-
 # News tab (consolidated version)
+
 def render_news_tab():
     st.subheader("📲 Policy & Market News")
 
@@ -155,39 +154,58 @@ def render_news_tab():
             {
                 "title": "2030 Extension of UK ETS",
                 "description": "The UK government is considering extending the UK ETS to 2030 to align with long-term climate goals.",
-                "status": "Under Review",
-                "last_updated": "2025-03-15",
-                "search_url": "https://www.google.com/search?q=UK+ETS+Extension+news"
+                "status": "Under Review; UK Gov Consultation closed on 9 April 2025",
+                "Latest Developments": "The UK ETS Authority published a consultation paper setting out its proposals for extending the UK ETS scheme based on stakeholder feedback, beyond the end of Phase I to follow directly into a second phase from 1 January 2031 onward. There are three options: (1) 2031-2037, (2) 2031-2040, and (3) 2031-2042. The consultation also seeks views on the length of the proposed Phase II and whether banking of emissions allowances between Phase I and Phase II should be permitted. Responses were submitted by 23:59 BST on 9 April 2025 & UK Gov response is expected by end of 2025.",
+                "9 April 2025 Consultation": "https://assets.publishing.service.gov.uk/media/67abe55a0f72884e1756aa6f/extending-the-ukets-cap-beyond-2030.pdf",
+                "Other Notable Developments": "The UK ETS free allocation period has been extended beyond 2025 to 2026, with the latter being treated as an extension of the 2021–2025 period. The second allocation period will commence in 2027 and run through 2030. This period may introduce revised rules and allocation methodologies based on the outcomes of the ongoing Free Allocation Review. The Authority intends to publish its response to this review by the end of 2025. Link: https://assets.publishing.service.gov.uk/media/676000e81857548bccbcfa2a/ukets-moving-second-free-allocation-period-authority-response.pdf",
+                "last_updated": "2025-04-14",
+                "search_url": ["https://www.google.com/search?q=UK+ETS+Extension+news"]
             },
             {
                 "title": "Possible Linkage with EU ETS",
-                "description": "Discussions are ongoing regarding linking the UK ETS with the EU ETS to create a unified carbon market.",
-                "status": "In Negotiation",
-                "last_updated": "2025-01-28",
-                "search_url": "https://www.google.com/search?q=UK+ETS+EU+linkage"
+                "description": "In March 2025, reports emerged that the UK government is considering linking its ETS with the EU's carbon market. As of April 2025, such developments have not progressed beyond this expression of interest. Notably, this consideration is part of a broader strategy to enhance cooperation with the EU, including discussions anticipated at a UK-EU Summit in May 2025. Additionally, Labour Party leader Sir Keir Starmer has expressed intentions to relink the UK and EU emission trading schemes as part of efforts to reset relations with Brussels.",
+                "status": "Interest Expressed; Formal Talks Pending",
+                "Key Dates to Watch": "UK-EU Summit (May 2025): This summit is expected to address broader post-Brexit relations, including potential cooperation on emissions trading.",
+                "Latest Developments": "The EU-UK Parliamentary Partnership Assembly (PPA) took place on 17 March 2025. A document was published, called 'Recommendation on strengthening the EU-UK relationship', which included a section calling for serious consideration of linking UK & EU ETS. The PPA is a body that allows for dialogue between the UK and EU on various issues, and is expected to meet again in autumn 2025 in London, although no formal date has yet been set. Link to Meeting Document: https://www.europarl.europa.eu/cmsdata/293904/5th%20PPA%20Recommendation%2017.03.25.pdf",
+                "PPA Meeting": "https://www.europarl.europa.eu/delegations/en/5th-eu-uk-parliamentary-partnership-asse/product-details/20250224DPU39839",
+                "last_updated": "2025-04-14",
+                "search_url": ["https://www.google.com/search?q=UK+ETS+EU+linkage"]
             },
             {
-                "title": "Inclusion of Waste Incineration Facilities",
-                "description": "The UK government is exploring the inclusion of waste incineration facilities in the UK ETS to reduce emissions.",
+                "title": "Inclusion of Waste Incineration Facilities & Maritime Sector in UK ETS",
+                "description": "The UK government is exploring the inclusion of waste incineration facilities and the Maritime Sector in the UK ETS to reduce emissions and better regulate the shipping sector.",
                 "status": "Proposed",
-                "last_updated": "2025-02-10",
-                "search_url": "https://www.google.com/search?q=UK+ETS+waste+incineration"
-            },
-            {
-                "title": "Inclusion of Maritime Sector in UK ETS",
-                "description": "Following the EU's lead, the UK is considering including maritime emissions in the UK ETS to better regulate the shipping sector.",
-                "status": "Under Discussion",
-                "last_updated": "2025-03-30",
-                "search_url": "https://www.google.com/search?q=UK+ETS+maritime+shipping+inclusion"
+                "last_updated": "2025-04-14",
+                "search_url": [
+                    "https://www.google.com/search?q=UK+ETS+waste+incineration",
+                    "https://www.google.com/search?q=UK+ETS+maritime+shipping"
+                ]
             }
         ]
 
         for policy in policies:
             st.markdown(f"#### **{policy['title']}**")
             st.write(policy["description"])
-            st.write(f"**Status:** {policy['status']} | **Last Updated:** {policy['last_updated']}")
-            st.markdown(f"[🔍 View Google News]({policy['search_url']})")
+            st.write(f"**Status:** {policy.get('status', 'N/A')} | **Last Updated:** {policy.get('last_updated', 'N/A')}")
+
+            # Display additional fields
+            excluded_keys = {"title", "description", "status", "last_updated", "search_url"}
+            for key, value in policy.items():
+                if key not in excluded_keys:
+                    if isinstance(value, str) and value.startswith("http"):
+                        st.markdown(f"**{key}:** [Link]({value})")
+                    else:
+                        st.markdown(f"**{key}:** {value}")
+
+            # Handle one or more search links
+            search_links = policy.get("search_url", [])
+            if isinstance(search_links, str):
+                search_links = [search_links]
+            for url in search_links:
+                st.markdown(f"🔍 [View Google News]({url})")
+
             st.markdown("---")
+
 
     # Tab 3 – UKA Players + Google Links
     with news_tabs[2]:
@@ -236,7 +254,7 @@ def overlays_tab(df):
     elif selected_overlay == "UKA vs EU Linkage Announcement":
         render_uka_vs_policy_overlay(df)
 
-    elif selected_overlay == "UKA vs UK Industrial Output":
+    elif selected_overlay == "UKA vs UK Average Weather":
         render_uka_vs_industrial_overlay(df)
 
     plt.style.use("ggplot")
