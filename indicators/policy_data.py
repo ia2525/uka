@@ -5,7 +5,7 @@ def get_policies():
         {
             "title": "2030 Extension of UK ETS",
             "description": "The UK government is considering extending the UK ETS to 2030 to align with long-term climate goals.",
-            "status": "Under Review; UK Gov Consultation closed on 9 April 2025",
+            "status": "Under Review; UK Gov Consultation closed on 9 April 2025. Publication of results expected EoY 2025",
             "Latest Developments": "The UK ETS Authority published a consultation paper setting out its proposals for extending the UK ETS scheme based on stakeholder feedback, beyond the end of Phase I to follow directly into a second phase from 1 January 2031 onward...",
             "9 April 2025 Consultation": "https://assets.publishing.service.gov.uk/media/67abe55a0f72884e1756aa6f/extending-the-ukets-cap-beyond-2030.pdf",
             "Other Notable Developments": "The UK ETS free allocation period has been extended beyond 2025 to 2026...",

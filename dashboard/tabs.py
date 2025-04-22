@@ -14,6 +14,7 @@ import plotly.graph_objects as go
 from indicators.carbon_intensity_api import fetch_carbon_intensity, fetch_national_carbon_timeseries, fetch_national_carbon_timeseries_2020
 from indicators.scrape_uka_prices import scrape_and_update_uka_timeseries
 from indicators.production_index import reshape_allocation_timeseries
+from indicators.market_updates import load_market_update_markdown
 from indicators.policy_data import get_policies
 
 
@@ -214,10 +215,13 @@ def render_carbon_tab():
 def render_news_tab():
     st.subheader("📲 Policy & Market News")
 
-    news_tabs = st.tabs(["📋 Policy Tracker", "🏭 Major UKA Players"])
+    news_tabs = st.tabs([
+        "📋 Policy Tracker",
+        "🗞️ UKA Monthly Market Updates",
+        "🏭 Major UKA Players"
+    ])
 
     # Tab 1 – Policy Tracker
-
     with news_tabs[0]:
         st.markdown("### 📋 Policy Tracker")
         policies = get_policies()
@@ -240,8 +244,27 @@ def render_news_tab():
 
             st.markdown("---")
 
-    # Tab 2 – UKA Players + Google Links
+    # Tab 2 – Monthly Market Updates from DOCX
     with news_tabs[1]:
+        st.markdown("### 🗞️ UKA Monthly Market Updates")
+
+        newsletter_files = {
+            "February 2025": "data/market_updates/UKA_Market_Update_February_2025.docx",
+            "March 2025": "data/market_updates/UKA Market Update - March 2025.docx"
+        }
+
+        selected_month = st.selectbox("Select a month:", list(newsletter_files.keys()))
+
+        if selected_month:
+            doc_path = newsletter_files[selected_month]
+            try:
+                markdown_content = load_market_update_markdown(doc_path)
+                st.markdown(markdown_content)
+            except Exception as e:
+                st.error(f"Could not load market update: {e}")
+
+    # Tab 3 – UKA Players + Google Search Links
+    with news_tabs[2]:
         st.markdown("### 🏭 News on Major UKA Buyers & Industries")
 
         st.markdown("---")
@@ -259,6 +282,7 @@ def render_news_tab():
 
         for label, url in search_links.items():
             st.markdown(f"🔗 [**{label}**]({url})")
+
 
 #Overlay tab 
 def overlays_tab(df):
