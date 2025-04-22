@@ -1,6 +1,4 @@
 import sys
-import json
-import requests
 import pandas as pd
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -14,7 +12,6 @@ import plotly.graph_objects as go
 
 
 from indicators.carbon_intensity_api import fetch_carbon_intensity, fetch_national_carbon_timeseries, fetch_national_carbon_timeseries_2020
-from indicators.weather import fetch_weather_forecasts
 from indicators.scrape_uka_prices import scrape_and_update_uka_timeseries
 from indicators.production_index import reshape_allocation_timeseries
 
@@ -209,21 +206,6 @@ def render_carbon_tab():
     else:
         st.warning("No historical data could be loaded.")
 
-
-# Weather tab
-def render_weather_tab():
-    weather_data = fetch_weather_forecasts()
-    st.subheader("UK Weather Forecast")
-
-    city_tabs = st.tabs(weather_data["city"].unique().tolist())
-    for tab, city in zip(city_tabs, weather_data["city"].unique()):
-        with tab:
-            city_data = weather_data[weather_data["city"] == city]
-            available_cols = [col for col in ["temp", "wind_speed"] if col in city_data.columns]
-            if available_cols:
-                st.line_chart(city_data.set_index("date")[available_cols])
-            else:
-                st.warning(f"No weather data available for {city}.")
 
 # News tab (consolidated version)
 
